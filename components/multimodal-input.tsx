@@ -41,12 +41,12 @@ function PureMultimodalInput({
   chatId: string;
   input: string;
   setInput: (value: string) => void;
-  status: string;
+  status: UseChatHelpers['status'];
   stop: () => void;
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
+  setMessages: UseChatHelpers['setMessages'];
   append: any;
   handleSubmit: (message: string) => void;
   className?: string;
