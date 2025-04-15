@@ -2,39 +2,37 @@
 
 import type { Attachment, UIMessage } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
-import type { Vote } from '@/lib/db/schema';
 import { fetcher, generateUUID } from '@/lib/utils';
-import { Artifact } from './artifact';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
-import type { VisibilityType } from './visibility-selector';
-import { useArtifactSelector } from '@/hooks/use-artifact';
 import { toast } from 'sonner';
-import { unstable_serialize } from 'swr/infinite';
-import { getChatHistoryPaginationKey } from './sidebar-history';
+
+// Define mock messages
+const mockMessages = [
+  "This is the first mock response. I'm pretending to be an LLM!",
+  "Here is the second predefined message. Isn't this fun?",
+  "And this is the final mock message. Let's cycle back now.",
+];
 
 export function Chat({
   id,
   initialMessages,
   selectedChatModel,
-  selectedVisibilityType,
   isReadonly,
 }: {
   id: string;
   initialMessages: Array<UIMessage>;
   selectedChatModel: string;
-  selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
 }) {
-  const { mutate } = useSWRConfig();
+  const [mockResponseIndex, setMockResponseIndex] = useState(0);
 
   const {
     messages,
     setMessages,
-    handleSubmit,
     input,
     setInput,
     append,
@@ -49,20 +47,31 @@ export function Chat({
     sendExtraMessageFields: true,
     generateId: generateUUID,
     onFinish: () => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
+      console.log("Mock chat finished turn.");
     },
     onError: () => {
-      toast.error('An error occurred, please try again!');
+      console.error("useChat onError triggered - should not happen in mock mode");
     },
   });
 
-  const { data: votes } = useSWR<Array<Vote>>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher,
-  );
+  // Refactor: handleMockSubmit now takes a message string
+  const handleMockSubmit = useCallback(async (message: string) => {
+    if (!message) return;
+    setInput('');
+    await append({ role: 'user', content: message, id: generateUUID() });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const responseContent = mockMessages[mockResponseIndex];
+    await append({ role: 'assistant', content: responseContent, id: generateUUID() });
+    setMockResponseIndex(prevIndex => (prevIndex + 1) % mockMessages.length);
+  }, [append, setInput, mockResponseIndex]);
 
+  // Wrapper function to match the expected type for MultimodalInput's handleSubmit
+  const handleSubmitForInput = useCallback(() => {
+    handleMockSubmit(input);
+  }, [handleMockSubmit, input]);
+
+  const votes = undefined;
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
-  const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
   return (
     <>
@@ -70,7 +79,6 @@ export function Chat({
         <ChatHeader
           chatId={id}
           selectedModelId={selectedChatModel}
-          selectedVisibilityType={selectedVisibilityType}
           isReadonly={isReadonly}
         />
 
@@ -82,44 +90,26 @@ export function Chat({
           setMessages={setMessages}
           reload={reload}
           isReadonly={isReadonly}
-          isArtifactVisible={isArtifactVisible}
         />
 
-        <form className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
+        <form className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl" onSubmit={e => { e.preventDefault(); handleMockSubmit(input); }}>
           {!isReadonly && (
             <MultimodalInput
               chatId={id}
               input={input}
               setInput={setInput}
-              handleSubmit={handleSubmit}
-              status={status}
+              handleSubmit={handleSubmitForInput}
+              status={status as any}
               stop={stop}
               attachments={attachments}
               setAttachments={setAttachments}
               messages={messages}
-              setMessages={setMessages}
-              append={append}
+              setMessages={setMessages as any}
+              append={append as any}
             />
           )}
         </form>
       </div>
-
-      <Artifact
-        chatId={id}
-        input={input}
-        setInput={setInput}
-        handleSubmit={handleSubmit}
-        status={status}
-        stop={stop}
-        attachments={attachments}
-        setAttachments={setAttachments}
-        append={append}
-        messages={messages}
-        setMessages={setMessages}
-        reload={reload}
-        votes={votes}
-        isReadonly={isReadonly}
-      />
     </>
   );
 }
